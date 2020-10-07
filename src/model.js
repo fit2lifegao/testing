@@ -185,7 +185,7 @@ class Job extends Sequelize.Model {
 
     const contractIds = contracts.map(item => item['id']);
 
-    const jobs = await Job.findAll({ where: { ContractId: [...contractIds] } });
+    const jobs = await Job.findAll({ where: {[Op.and]: [{ContractId: [...contractIds]}, {paymentDate:null}] } });
 
     return jobs;
   }
