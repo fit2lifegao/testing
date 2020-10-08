@@ -12,12 +12,16 @@ class Profile extends Sequelize.Model {
   Deposits money into the the the balance of a client, a client can't deposit more than 25% his total of jobs to pay. (at the deposit moment)
   */
   static async depositMoney(userId = null, data = null) {
+    let job_price = 0;
+    let deposit = 0;
+
     if (userId === null || data === null)
       throw new Error('Invalid userId or data')
 
-    let job_price = 0;
-    let deposit = data['deposit'] || 0;
+
+    deposit = data['deposit'];
     const jobs = await Job.findAll({ where: { ContractId: userId } });
+
     if (jobs) {
       job_price = jobs.reduce((pre, v) => {
         pre += v['price'];
@@ -65,7 +69,6 @@ Profile.init(
 );
 
 class Contract extends Sequelize.Model {
-
   /*
   find all of contracts only contain non terminated contracts.
   */
@@ -85,6 +88,9 @@ class Contract extends Sequelize.Model {
   Returns the profession that earned the most money (sum of jobs paid) for any contactor that worked in the query time range.
   */
   static async bestProfession(start = null, end = null) {
+    let max = 0;
+    let contract_id;
+
     const contracts = await Contract.findAll({ where: { createdAt: { [Op.between]: [start, end] } } });
     if (!contracts)
       return;
@@ -98,14 +104,11 @@ class Contract extends Sequelize.Model {
       group: ['ContractId'],
     });
 
-    let max = 0;
-    let contract_id;
     for (let job of jobs) {
-      let k = JSON.parse(JSON.stringify(job)); // need time to learn how to parse SequelizeInstance
-      if (k.totalAmount > max) {
-        max = k.totalAmount;
-        contract_id = k['ContractId']
-
+      let totalAmount = job.getDataValue('totalAmount');
+      if (totalAmount > max) {
+        max = totalAmount;
+        contract_id = job['ContractId']
       }
     }
 
@@ -118,6 +121,10 @@ class Contract extends Sequelize.Model {
 Returns the profession that earned the most money (sum of jobs paid) for any contactor that worked in the query time range.
 */
   static async bestClients(start = null, end = null) {
+    let max = 0;
+    let ids = [];
+    let allJobs = [];
+
     const contracts = await Contract.findAll({ where: { createdAt: { [Op.between]: [start, end] } } });
     if (!contracts)
       return;
@@ -131,12 +138,8 @@ Returns the profession that earned the most money (sum of jobs paid) for any con
       group: ['ContractId'],
     });
 
-    let max = 0;
-    let ids = [];
-    let allJobs = [];
     for (let job of jobs) {
-      let k = JSON.parse(JSON.stringify(job)); // need time to learn how to parse SequelizeInstance
-      allJobs.push(k);
+      allJobs.push({ ContractId: job['ContractId'], paid: job['paid'] });
     }
 
     allJobs.sort((a, b) => Number(b.paid) - Number(a.paid));
@@ -179,13 +182,11 @@ class Job extends Sequelize.Model {
     Contract.belongsTo(Profile, { foreignKey: 'ContractorId' })
 
     const contracts = await Contract.findAll({ where: { ContractorId: profile_id } })
-
     if (!contracts)
       return;
 
     const contractIds = contracts.map(item => item['id']);
-
-    const jobs = await Job.findAll({ where: {[Op.and]: [{ContractId: [...contractIds]}, {paymentDate:null}] } });
+    const jobs = await Job.findAll({ where: { [Op.and]: [{ ContractId: [...contractIds] }, { paymentDate: null }] } });
 
     return jobs;
   }
@@ -219,6 +220,7 @@ class Job extends Sequelize.Model {
     return results;
   }
 }
+
 Job.init(
   {
     description: {
